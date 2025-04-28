@@ -1,151 +1,148 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Box, Button, Typography, IconButton } from "@mui/material";
-import VolumeUpIcon from "@mui/icons-material/VolumeUp";
+// src/pages/InterviewPage.jsx
+
+import React, { useRef, useState } from "react";
+import { useInterviewStore } from "../store/interviewStore.js";
+import { useSpeechToText } from "../utils/useSpeechToText.js";
+import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import Webcam from "react-webcam";
-import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 const InterviewPage = () => {
-  const questions = [
-    "Tell me about yourself.",
-    "What are your strengths and weaknesses?",
-    "Why do you want to work for this company?",
-  ];
+  const {
+    questions,
+    currentQuestionIndex,
+    userAnswers,
+    setCurrentQuestionIndex,
+    isRecording,
+  } = useInterviewStore();
 
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [responses, setResponses] = useState([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [videoBlob, setVideoBlob] = useState(null);
-
+  const { startRecording, stopRecording } = useSpeechToText();
   const webcamRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const videoChunks = useRef([]);
-
-  const { transcript, listening, resetTranscript } = useSpeechRecognition();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!listening && transcript) {
-      const updatedResponses = [...responses];
-      updatedResponses[currentIndex] = { question: questions[currentIndex], answer: transcript };
-      setResponses(updatedResponses);
+  const [loading, setLoading] = useState(false);
+
+  const currentQuestion = questions[currentQuestionIndex];
+
+  const handleNext = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
     }
-  }, [listening, transcript]);
+  };
 
-  // ✅ Check browser support for speech recognition
-  useEffect(() => {
-    if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
-      alert("Your browser does not support speech recognition.");
-    }
-  }, []);
-
-  // ✅ Request microphone and camera permission
-  useEffect(() => {
-    navigator.permissions.query({ name: "microphone" }).then((result) => {
-      if (result.state !== "granted") {
-        alert("Microphone permission is required for recording.");
-      }
-    });
-  }, []);
-
-  // ✅ Start Recording
-  const startRecording = async () => {
-    if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
-      alert("Speech Recognition is not supported in your browser.");
-      return;
-    }
-
-    setIsRecording(true);
-    SpeechRecognition.startListening({ continuous: true });
-
+  const handleFinishInterview = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setLoading(true); // Start loading
 
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          videoChunks.current.push(event.data);
-        }
+      const webcamImage = webcamRef.current?.getScreenshot();
+
+      const payload = {
+        questions,
+        userAnswers,
+        webcamImage,
       };
 
-      mediaRecorderRef.current.start();
+      const response = await axios.post(
+        "http://localhost:5000/api/interview/analyze",
+        payload
+      );
+
+      console.log(response.data);
+
+      // Navigate to results page with data
+      navigate("/results", { state: response.data });
     } catch (error) {
-      alert("Error accessing camera or microphone: " + error.message);
+      console.error("Error submitting interview:", error);
+      alert("Something went wrong while finishing the interview.");
+    } finally {
+      setLoading(false); // Stop loading
     }
   };
 
-  // ✅ Stop Recording
-  const stopRecording = () => {
-    setIsRecording(false);
-    SpeechRecognition.stopListening();
-    resetTranscript();
+  if (!currentQuestion) {
+    return (
+      <Typography variant="h6">
+        No questions available. Please start an interview.
+      </Typography>
+    );
+  }
 
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-
-      mediaRecorderRef.current.onstop = () => {
-        const videoBlob = new Blob(videoChunks.current, { type: "video/webm" });
-        setVideoBlob(videoBlob);
-        videoChunks.current = [];
-      };
-    }
-  };
-
-  // ✅ Next Question
-  const nextQuestion = () => {
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      resetTranscript();
-      setVideoBlob(null);
-    }
-  };
-
-  // ✅ Finish Interview
-  const finishInterview = () => {
-    console.log("Final Responses:", responses);
-    alert("Interview finished!");
-  };
+  if (loading) {
+    return (
+      <Box textAlign="center" p={4}>
+        <CircularProgress />
+        <Typography variant="h6" mt={2}>
+          Analyzing your interview, please wait...
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", padding: "20px" }}>
-      {/* Left: Question Display */}
-      <Box sx={{ flex: 1, padding: "20px" }}>
-        <Typography variant="h5" fontWeight="bold">
-          Question {currentIndex + 1}/{questions.length}
-        </Typography>
-        <Typography variant="h6" sx={{ marginTop: "10px" }}>{questions[currentIndex]}</Typography>
+    <Box textAlign="center" p={4}>
+      <Typography variant="h5" mb={2}>
+        Question {currentQuestionIndex + 1} of {questions.length}
+      </Typography>
+      <Typography variant="h6" mb={4}>
+        {currentQuestion.question}
+      </Typography>
 
-        {/* Speaker Button */}
-        <IconButton>
-          <VolumeUpIcon fontSize="large" />
-        </IconButton>
+      {/* Webcam */}
+      <Box mb={3} display="flex" justifyContent="center">
+        <Webcam
+          audio={false}
+          ref={webcamRef}
+          screenshotFormat="image/jpeg"
+          width={320}
+          height={240}
+        />
+      </Box>
 
-        {/* Start/Stop Recording */}
-        <Button
-          variant="contained"
-          color={isRecording ? "error" : "primary"}
-          sx={{ marginTop: "20px" }}
-          onClick={isRecording ? stopRecording : startRecording}
-        >
-          {isRecording ? "Stop Recording" : "Start Recording"}
-        </Button>
-
-        
-        {/* Next or Finish Button */}
-        {currentIndex < questions.length - 1 ? (
-          <Button variant="contained" color="success" sx={{ marginTop: "20px" }} onClick={nextQuestion}>
-            Next Question ➡️
+      {/* Recording Buttons */}
+      <Box mb={3}>
+        {!isRecording ? (
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={startRecording}
+            disabled={loading}
+          >
+            Start Recording
           </Button>
         ) : (
-          <Button variant="contained" color="secondary" sx={{ marginTop: "20px" }} onClick={finishInterview}>
-            Finish Interview
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={stopRecording}
+            disabled={loading}
+          >
+            Stop Recording
           </Button>
         )}
       </Box>
 
-      {/* Right: Webcam Display */}
-      <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
-        <Webcam ref={webcamRef} mirrored={true} audio muted />
+      {/* Navigation Buttons */}
+      <Box>
+        {currentQuestionIndex < questions.length - 1 ? (
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={handleNext}
+            disabled={loading}
+          >
+            Next Question
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleFinishInterview}
+            disabled={loading}
+          >
+            Finish Interview
+          </Button>
+        )}
       </Box>
     </Box>
   );

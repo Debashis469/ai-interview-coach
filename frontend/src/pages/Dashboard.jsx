@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useInterviewStore } from '../store/interviewStore.js';
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { BeatLoader } from "react-spinners"; // Spinner
@@ -17,8 +18,9 @@ import {
 
 const Dashboard = () => {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false); // ✅ Track Loading State
-  const navigate = useNavigate(); // ✅ Used for navigation
+  const [loading, setLoading] = useState(false); //Track Loading State
+  const navigate = useNavigate(); //Used for navigation
+  const { setQuestions } = useInterviewStore();
 
   const [formData, setFormData] = useState({
     jobTitle: "",
@@ -40,6 +42,9 @@ const Dashboard = () => {
       );
 
       console.log("Interview Questions:", response.data);
+
+      // ✅ Set questions in the store
+      setQuestions(response.data);
 
       // ✅ Redirect to Instructions Page
       navigate("/instructions");

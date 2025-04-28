@@ -1,28 +1,62 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Webcam from "react-webcam";
 import { Box, Typography, Button, IconButton } from "@mui/material";
-import LightbulbIcon from "@mui/icons-material/Lightbulb"; // Lightbulb Icon
-import VideocamIcon from "@mui/icons-material/Videocam"; // Camera ON
-import VideocamOffIcon from "@mui/icons-material/VideocamOff"; // Camera OFF
-import MicIcon from "@mui/icons-material/Mic"; // Mic ON
-import MicOffIcon from "@mui/icons-material/MicOff"; // Mic OFF
-import AccountCircleIcon from "@mui/icons-material/AccountCircle"; // Placeholder User Avatar
+import LightbulbIcon from "@mui/icons-material/Lightbulb";
+import VideocamIcon from "@mui/icons-material/Videocam";
+import VideocamOffIcon from "@mui/icons-material/VideocamOff";
+import MicIcon from "@mui/icons-material/Mic";
+import MicOffIcon from "@mui/icons-material/MicOff";
 
 const InstructionPage = () => {
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [micError, setMicError] = useState("");
   const webcamRef = useRef(null);
   const navigate = useNavigate();
 
-  // Toggle Camera
-  const toggleCamera = () => {
-    setCameraOn((prev) => !prev);
+  const toggleCamera = async () => {
+    if (!cameraOn) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        setCameraOn(true);
+        setCameraError("");
+        // Clean up: stop the stream when not needed to avoid memory leak
+        stream.getTracks().forEach(track => track.stop());
+      } catch (error) {
+        console.error("Camera error:", error);
+        setCameraError("Camera access denied. Please allow camera permission in browser settings.");
+        setCameraOn(false);
+      }
+    } else {
+      setCameraOn(false);
+    }
   };
 
-  // Toggle Mic
-  const toggleMic = () => {
-    setMicOn((prev) => !prev);
+  const toggleMic = async () => {
+    if (!micOn) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setMicOn(true);
+        setMicError("");
+        stream.getTracks().forEach(track => track.stop());
+      } catch (error) {
+        console.error("Microphone error:", error);
+        setMicError("Microphone access denied. Please allow microphone permission in browser settings.");
+        setMicOn(false);
+      }
+    } else {
+      setMicOn(false);
+    }
+  };
+
+  const handleProceed = () => {
+    if (cameraOn && micOn) {
+      navigate("/interview");
+    } else {
+      alert("Please enable both camera and microphone to proceed.");
+    }
   };
 
   return (
@@ -37,85 +71,61 @@ const InstructionPage = () => {
         alignItems: "center",
       }}
     >
-      {/* Lightbulb Icon for Creativity */}
       <LightbulbIcon sx={{ fontSize: 60, color: "#f39c12" }} />
-    
-      {/* Privacy Notice */}
+
       <Typography variant="body2" sx={{ marginTop: "5px", color: "gray" }}>
-        🔏 We **do not** record your video or audio.
+        🔏 We do not record your video or audio.
       </Typography>
 
-      {/* Instructions */}
-      <Typography variant="body1" sx={{ maxWidth: "600px", marginTop: "20px", fontSize: "16px" }}>
-        To proceed, please **turn on your camera & microphone**. This ensures a **smooth interview experience**.  
-        Click the buttons below to enable them.  
-      </Typography>
-
-      {/* Webcam Preview */}
-      <Box
-        sx={{
-          width: 320,
-          height: 320,
-          borderRadius: "10px",
-          backgroundColor: "black",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-          marginTop: "20px",
-          border: "5px solid #f39c12",
-        }}
-      >
+      {/* Camera Preview */}
+      <Box sx={{ marginTop: "20px", width: 320, height: 240, border: "2px solid #ccc", borderRadius: "10px", backgroundColor: "#000" }}>
         {cameraOn ? (
-          <Webcam ref={webcamRef} audio={micOn} width="100%" height="100%" mirrored={true} />
+          <Webcam audio={false} ref={webcamRef} screenshotFormat="image/jpeg" width="100%" height="100%" videoConstraints={{ facingMode: "user" }} />
         ) : (
-          <AccountCircleIcon sx={{ fontSize: 160, color: "gray" }} />
+          <Typography variant="body2" sx={{ color: "white", marginTop: "90px" }}>
+            Camera is off
+          </Typography>
         )}
       </Box>
 
-      {/* Toggle Buttons for Camera & Mic */}
-      <Box sx={{ display: "flex", justifyContent: "center", marginTop: "10px" }}>
-        {/* Camera Button */}
+      {/* Errors */}
+      {cameraError && <Typography color="error">{cameraError}</Typography>}
+      {micError && <Typography color="error">{micError}</Typography>}
+
+      {/* Toggle Buttons */}
+      <Box sx={{ marginTop: "20px", display: "flex", gap: "20px" }}>
         <IconButton
           onClick={toggleCamera}
           sx={{
-            margin: "10px",
-            color: cameraOn ? "green" : "red",
-            backgroundColor: "#f4f4f4",
-            "&:hover": { backgroundColor: "#ddd" },
+            backgroundColor: cameraOn ? "green" : "red",
+            color: "white",
+            "&:hover": { backgroundColor: cameraOn ? "#2e7d32" : "#c62828" },
           }}
         >
-          {cameraOn ? <VideocamIcon fontSize="large" /> : <VideocamOffIcon fontSize="large" />}
+          {cameraOn ? <VideocamIcon /> : <VideocamOffIcon />}
         </IconButton>
 
-        {/* Mic Button */}
         <IconButton
           onClick={toggleMic}
           sx={{
-            margin: "10px",
-            color: micOn ? "green" : "red",
-            backgroundColor: "#f4f4f4",
-            "&:hover": { backgroundColor: "#ddd" },
+            backgroundColor: micOn ? "green" : "red",
+            color: "white",
+            "&:hover": { backgroundColor: micOn ? "#2e7d32" : "#c62828" },
           }}
         >
-          {micOn ? <MicIcon fontSize="large" /> : <MicOffIcon fontSize="large" />}
+          {micOn ? <MicIcon /> : <MicOffIcon />}
         </IconButton>
       </Box>
 
-      {/* Interview Start Button */}
+      {/* Proceed Button */}
       <Button
         variant="contained"
-        color="success"
-        sx={{
-          marginTop: "20px",
-          fontSize: "16px",
-          fontWeight: "bold",
-          padding: "10px 20px",
-        }}
-        onClick={() => navigate("/interview")}
-        disabled={!cameraOn || !micOn} // ✅ Button enabled only if both are ON
+        color="primary"
+        sx={{ marginTop: "30px" }}
+        disabled={!cameraOn || !micOn}
+        onClick={handleProceed}
       >
-        I am Ready for Interview 🚀
+        Proceed to Interview
       </Button>
     </Box>
   );
